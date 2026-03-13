@@ -1,7 +1,11 @@
+import os
+from dotenv import load_dotenv
 import google.generativeai as genai
 
+load_dotenv()
+
 # ใส่ API Key ของคุณ
-genai.configure(api_key="AIzaSyDoynTfcXBsYb51Myd8z9_vZ3XTQ1Uz6hg")
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 print("รายชื่อโมเดลที่คุณสามารถใช้ได้:")
 for m in genai.list_models():
