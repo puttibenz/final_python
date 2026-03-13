@@ -8,28 +8,32 @@ load_dotenv()
 
 # 1. API Configuration
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-2.0-flash')
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 def extract_batch_with_gemini(posts_batch):
     """
     Sends a batch of posts to Gemini to extract information in one call.
     """
-    # Create a numbered list of posts for the prompt
-    batch_text = ""
+    # Create a structured list of posts for the prompt
+    batch_data = []
     for i, post in enumerate(posts_batch):
-        batch_text += f"--- POST {i+1} ---\n{post.get('text', '')}\n\n"
+        batch_data.append({
+            "id": i + 1,
+            "text": post.get('text', ''),
+            "url": post.get('facebookUrl', post.get('url', ''))
+        })
 
     prompt = f"""
-    คุณคือผู้ช่วยจัดการข้อมูลทริปและแคมป์ หน้าที่ของคุณคืออ่านลิสต์ของโพสต์ Facebook ต่อไปนี้:
+    คุณคือผู้ช่วยจัดการข้อมูลทริปและแคมป์ หน้าที่ของคุณคือวิเคราะห์ลิสต์ของโพสต์ Facebook ต่อไปนี้ (ในรูปแบบ JSON):
     
-    {batch_text}
+    {json.dumps(batch_data, ensure_ascii=False, indent=2)}
 
     สำหรับแต่ละโพสต์ ให้วิเคราะห์ดังนี้:
     1. วิเคราะห์ว่าเป็น "ประกาศรับสมัคร/ชวนไปทริปหรือแคมป์" หรือไม่ (is_camp_post: true/false)
     2. ถ้าใช่ให้สกัดข้อมูลตามโครงสร้างที่กำหนด ถ้าหาไม่เจอให้ใส่ "" หรือ 0
     
-    สำคัญ: ต้องตอบกลับเป็น JSON ARRAY ของออบเจกต์ จำนวน {len(posts_batch)} รายการ ตามลำดับโพสต์ที่ส่งไป
-    โครงสร้างออบเจกต์ใน Array:
+    สำคัญ: ต้องตอบกลับเป็น JSON ARRAY ของออบเจกต์ จำนวน {len(posts_batch)} รายการ ตามลำดับ id ที่ส่งไป
+    โครงสร้างออบเจกต์ในแต่ละรายการ:
     {{
         "is_camp_post": true หรือ false,
         "name": "ชื่อทริป (สรุปสั้นๆ)",
@@ -48,7 +52,11 @@ def extract_batch_with_gemini(posts_batch):
             prompt,
             generation_config=genai.GenerationConfig(response_mime_type="application/json")
         )
-        return json.loads(response.text)
+        # Robustly handle potential markdown wrapping even with mime_type
+        clean_text = response.text.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text.replace("```json", "", 1).replace("```", "", 1).strip()
+        return json.loads(clean_text)
     except Exception as e:
         print(f"❌ Error during API call: {e}")
         return None
