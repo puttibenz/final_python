@@ -1,0 +1,18 @@
+# Environments
+.env
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data files
+*.json
+clean_camps_ready_for_sql.json
+
+# Logs
+*.log
