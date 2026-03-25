@@ -2,6 +2,7 @@ import streamlit as st
 import json
 import os
 from components.camp_card import CampCard
+from database.crud import camp_repo
 
 st.set_page_config(page_title="Explore Camps - Camping Project", page_icon="🏕️", layout="wide")
 
@@ -9,18 +10,17 @@ st.set_page_config(page_title="Explore Camps - Camping Project", page_icon="🏕
 st.title("🏕️ Discover Your Next Adventure")
 st.markdown("Explore the best camping trips from across the community. Find, book, and explore.")
 
-# Load Data
-@st.cache_data
+# Load Data from Supabase
+@st.cache_data(ttl=600) # Cache for 10 minutes
 def load_camp_data():
-    file_path = 'data/camps.json'
-    if not os.path.exists(file_path):
-        return []
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        st.error(f"Failed to load data: {e}")
-        return []
+    data = camp_repo.get_all()
+    if not data:
+        # Fallback to local mock data if database is empty or not connected
+        file_path = 'data/camps.json'
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    return data
 
 camps_data = load_camp_data()
 
@@ -31,21 +31,25 @@ with st.sidebar:
     
     price_range = st.slider(
         "Max Price (฿)", 
-        0, 10000, 5000, 
+        0, 10000, 10000, 
         step=500
     )
     
+    if st.button("🔄 Refresh Data"):
+        st.cache_data.clear()
+        st.rerun()
+
     st.divider()
-    st.info("💡 Pro Tip: Filtered results update in real-time as you search.")
+    st.info("💡 Pro Tip: Results are fetched live from Supabase.")
 
 # --- Filter Logic ---
 filtered_data = [
     c for c in camps_data 
-    if (search_query.lower() in c['name'].lower() or search_query.lower() in c['location'].lower())
-    and (c['price'] <= price_range)
+    if (search_query.lower() in c['name'].lower() or search_query.lower() in (c.get('location') or "").lower())
+    and (c.get('price', 0) <= price_range)
 ]
 
-# --- Display Content using Classes ---
+# --- Display Content ---
 if not filtered_data:
     st.warning("No trips found matching your criteria. Try widening your search!")
 else:
@@ -55,13 +59,10 @@ else:
     cols = st.columns(3)
     
     for index, data in enumerate(filtered_data):
-        # Instantiate the CampCard Class for each trip
         camp_card = CampCard(data)
-        
         with cols[index % 3]:
-            # Use the Class method to render the UI
             camp_card.render()
 
 # --- Footer ---
 st.divider()
-st.caption("© 2026 Camping Project Community | Data sourced from Facebook Community Groups")
+st.caption("© 2026 Camping Project Community | Powered by Supabase & Streamlit")
