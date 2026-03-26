@@ -11,10 +11,14 @@ class CampCard:
         self.duration = data.get('duration', 0)
         self.location = data.get('location', 'Unknown')
         self.price = data.get('price', 0)
-        self.slots = data.get('slots', 0)
+        # Handle available_slots from DB or fall back to total slots
+        self.slots = data.get('available_slots', data.get('slots', 0))
         self.contact = data.get('contact', 'N/A')
         self.link = data.get('link', '#')
-        self.image = data.get('image', 'https://via.placeholder.com/400x250')
+        
+        # Safe handling for image (if None or empty, use placeholder)
+        img = data.get('image')
+        self.image = img if img and str(img).startswith('http') else 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=800&q=80'
 
     def _get_style(self):
         """Returns the CSS styling for the card."""
