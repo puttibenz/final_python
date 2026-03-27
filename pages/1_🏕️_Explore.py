@@ -1,15 +1,17 @@
 import streamlit as st
 from components.camp_card import CampCard
 from database.crud import camp_repo
+from utils.auth import init_session_state, check_auth_required
 
 st.set_page_config(page_title="Explore Camps - Camping Project", page_icon="🏕️", layout="wide")
+init_session_state()
+check_auth_required()
 
-# Modern Header
 st.title("🏕️ Discover Your Next Adventure")
-st.markdown("Explore the best camping trips from across the community. Find, book, and explore.")
+st.markdown("Explore the best camping trips from across the community.")
 
-# Fetch Data from Supabase
-@st.cache_data(ttl=600)  # Cache for 10 minutes
+# Fetch Data from MySQL
+@st.cache_data(ttl=600)
 def load_camp_data():
     try:
         return camp_repo.get_all()
@@ -23,13 +25,7 @@ camps_data = load_camp_data()
 with st.sidebar:
     st.header("🔍 Search & Filter")
     search_query = st.text_input("Find by name or province", placeholder="e.g. Khao Kho")
-    
-    price_range = st.slider(
-        "Max Price (฿)", 
-        0, 10000, 10000, 
-        step=500
-    )
-    
+    price_range = st.slider("Max Price (฿)", 0, 10000, 10000, step=500)
     st.divider()
     st.info("💡 Pro Tip: Filtered results update in real-time as you search.")
 
@@ -42,26 +38,18 @@ filtered_data = [
     and (float(c.get('price', 0)) <= price_range)
 ]
 
-# --- Display Content using Classes ---
+# --- Display Grid ---
 if not filtered_data:
     if not camps_data:
         st.info("No camping trips have been created yet. Be the first to host one!")
     else:
         st.warning("No trips found matching your criteria. Try widening your search!")
 else:
-    st.write(f"Showing **{len(filtered_data)}** upcoming trips.")
-    
-    # Create 3-column grid
     cols = st.columns(3)
-    
     for index, data in enumerate(filtered_data):
-        # Instantiate the CampCard Class for each trip
         camp_card = CampCard(data)
-        
         with cols[index % 3]:
-            # Use the Class method to render the UI
             camp_card.render()
 
-# --- Footer ---
 st.divider()
-st.caption("© 2026 Camping Project Community | Data synced with Supabase Realtime Database")
+st.caption("© 2026 Camping Project Community")
