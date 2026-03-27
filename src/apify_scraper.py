@@ -29,7 +29,7 @@ class FacebookScraper:
             print(f"❌ Error during scraping: {e}")
             return []
 
-    def save_to_json(self, filename='apify_raw_data.json'):
+    def save_to_json(self, filename='apify_raw_data_latest.json'):
         """Saves the scraped data to a JSON file."""
         if not self.dataset_items:
             print("⚠️ No data to save.")

@@ -11,7 +11,7 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 model = genai.GenerativeModel('gemini-2.0-flash')
 
-def clean_raw_data_with_ai(raw_data=None, input_file='apify_raw_data.json', output_file='final_camps_cleaned.json', save_to_file=True):
+def clean_raw_data_with_ai(raw_data=None, input_file='apify_raw_data_latest.json', output_file='clean_camps_ready_for_sql.json', save_to_file=True):
     # หากไม่ได้ส่ง raw_data มา ให้ลองอ่านจากไฟล์
     if raw_data is None:
         if not os.path.exists(input_file):
@@ -59,28 +59,36 @@ def clean_raw_data_with_ai(raw_data=None, input_file='apify_raw_data.json', outp
         chunk = raw_data[i:i+batch_size]
         print(f"⏳ กำลังประมวลผลรายการที่ {i+1} ถึง {min(i+batch_size, len(raw_data))}...")
         
-        try:
-            # ส่งข้อมูลไปประมวลผล
-            full_prompt = prompt_instructions + json.dumps(chunk, ensure_ascii=False)
-            response = model.generate_content(full_prompt)
-            
-            # สกัดเฉพาะเนื้อหา JSON
-            raw_text = response.text.strip()
-            if "```json" in raw_text:
-                raw_text = raw_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in raw_text:
-                # Handle cases where it's just ``` without 'json'
-                raw_text = raw_text.split("```")[1].split("```")[0].strip()
-            
-            cleaned_batch = json.loads(raw_text)
-            cleaned_results.extend(cleaned_batch)
-            
-            # 💤 พัก 5 วินาทีเพื่อรักษาสุขภาพ API Quota
-            print(f"✅ บันทึกแล้ว {len(cleaned_results)} รายการ... พัก 5 วินาที...")
-            time.sleep(5)
-            
-        except Exception as e:
-            print(f"⚠️ เกิดข้อผิดพลาดในรอบนี้: {e}")
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                # ส่งข้อมูลไปประมวลผล
+                full_prompt = prompt_instructions + json.dumps(chunk, ensure_ascii=False)
+                response = model.generate_content(full_prompt)
+                
+                # สกัดเฉพาะเนื้อหา JSON
+                raw_text = response.text.strip()
+                if "```json" in raw_text:
+                    raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in raw_text:
+                    raw_text = raw_text.split("```")[1].split("```")[0].strip()
+                
+                cleaned_batch = json.loads(raw_text)
+                cleaned_results.extend(cleaned_batch)
+                
+                print(f"✅ บันทึกแล้ว {len(cleaned_results)} รายการ... พัก 5 วินาที...")
+                time.sleep(5)
+                break  # สำเร็จแล้ว ออกจาก retry loop
+                
+            except Exception as e:
+                error_msg = str(e)
+                if "429" in error_msg or "Resource has been exhausted" in error_msg:
+                    wait_time = 30 * (2 ** attempt)  # 30s, 60s, 120s, 240s, 480s
+                    print(f"⏳ ถูก Rate Limit (429) — รอ {wait_time} วินาทีแล้วลองใหม่ (ครั้งที่ {attempt+1}/{max_retries})...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"⚠️ เกิดข้อผิดพลาดในรอบนี้: {e}")
+                    break  # error อื่นไม่ต้อง retry
 
     # บันทึกเป็นไฟล์ใหม่ที่คลีนแล้ว (ถ้าต้องการ)
     if save_to_file:
