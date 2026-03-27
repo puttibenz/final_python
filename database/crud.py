@@ -1,103 +1,171 @@
-from typing import List, Optional
-from datetime import datetime, timedelta
-from .models import User, Booking, Camp
-import random
-
-# Mock data for demonstration
-mock_users = [
-    User(
-        id=1,
-        username="admin",
-        email="admin@example.com",
-        full_name="Administrator",
-        phone="+66 123 456 789",
-        created_at=datetime(2024, 1, 1),
-        total_bookings=5,
-        total_spent=25000.0
-    )
-]
+from database.connection import get_connection
 
 
-mock_camps = [
-    Camp(id=1, name="Mountain View Camp", location="Chiang Mai", price_per_night=1500.0, max_guests=4, description="Beautiful mountain views"),
-    Camp(id=2, name="Beach Paradise", location="Phuket", price_per_night=2000.0, max_guests=6, description="Seaside camping"),
-    Camp(id=3, name="Forest Retreat", location="Kanchanaburi", price_per_night=1200.0, max_guests=2, description="Peaceful forest setting"),
-]
+class UserRepository:
+    """จัดการข้อมูล users"""
 
-mock_bookings = [
-    Booking(
-        id=1,
-        user_id=1,
-        camp_name="Mountain View Camp",
-        location="Chiang Mai",
-        check_in_date=datetime(2024, 3, 1),
-        check_out_date=datetime(2024, 3, 3),
-        guests=2,
-        total_price=3000.0,
-        status="completed",
-        created_at=datetime(2024, 2, 25)
-    ),
-    Booking(
-        id=2,
-        user_id=1,
-        camp_name="Beach Paradise",
-        location="Phuket",
-        check_in_date=datetime(2024, 4, 15),
-        check_out_date=datetime(2024, 4, 18),
-        guests=4,
-        total_price=6000.0,
-        status="confirmed",
-        created_at=datetime(2024, 3, 20)
-    ),
-    Booking(
-        id=3,
-        user_id=1,
-        camp_name="Forest Retreat",
-        location="Kanchanaburi",
-        check_in_date=datetime(2024, 2, 10),
-        check_out_date=datetime(2024, 2, 12),
-        guests=1,
-        total_price=2400.0,
-        status="cancelled",
-        created_at=datetime(2024, 2, 5)
-    ),
-]
+    def create_user(self, username, email, password_hash, full_name=None, phone=None):
+        conn = get_connection()
+        if not conn: return None
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO users (username, email, password_hash, full_name, phone) VALUES (%s, %s, %s, %s, %s)",
+                    (username, email, password_hash, full_name, phone)
+                )
+                conn.commit()
+                return cur.lastrowid
+        except Exception as e:
+            print(f"❌ Create User Error: {e}")
+            return None
+        finally:
+            conn.close()
 
-def get_user_by_username(username: str) -> Optional[User]:
-    """Get user by username"""
-    for user in mock_users:
-        if user.username == username:
-            return user
-    return None
+    def get_user_by_email(self, email):
+        conn = get_connection()
+        if not conn: return None
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+                return cur.fetchone()
+        except Exception as e:
+            print(f"❌ Get User Error: {e}")
+            return None
+        finally:
+            conn.close()
 
-def get_user_bookings(user_id: int) -> List[Booking]:
-    """Get all bookings for a user"""
-    return [booking for booking in mock_bookings if booking.user_id == user_id]
+    def get_user_by_id(self, user_id):
+        conn = get_connection()
+        if not conn: return None
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+                return cur.fetchone()
+        except Exception as e:
+            print(f"❌ Get User Error: {e}")
+            return None
+        finally:
+            conn.close()
 
-def get_user_stats(user_id: int) -> dict:
-    """Get user statistics"""
-    bookings = get_user_bookings(user_id)
-    total_bookings = len(bookings)
-    completed_bookings = len([b for b in bookings if b.status == "completed"])
-    cancelled_bookings = len([b for b in bookings if b.status == "cancelled"])
-    total_spent = sum(b.total_price for b in bookings if b.status == "completed")
+    def update_user(self, user_id, **kwargs):
+        allowed = {"username", "full_name", "avatar_url", "bio", "role", "phone"}
+        data = {k: v for k, v in kwargs.items() if k in allowed}
+        if not data:
+            return None
+        conn = get_connection()
+        if not conn: return None
+        try:
+            sets = ", ".join(f"{k} = %s" for k in data)
+            vals = list(data.values()) + [user_id]
+            with conn.cursor() as cur:
+                cur.execute(f"UPDATE users SET {sets} WHERE id = %s", vals)
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"❌ Update User Error: {e}")
+            return None
+        finally:
+            conn.close()
 
-    return {
-        "total_bookings": total_bookings,
-        "completed_bookings": completed_bookings,
-        "cancelled_bookings": cancelled_bookings,
-        "total_spent": total_spent,
-        "average_booking_value": total_spent / completed_bookings if completed_bookings > 0 else 0,
-        "favorite_location": get_favorite_location(bookings)
-    }
 
-def get_favorite_location(bookings: List[Booking]) -> str:
-    """Get user's favorite camping location"""
-    locations = {}
-    for booking in bookings:
-        if booking.status == "completed":
-            locations[booking.location] = locations.get(booking.location, 0) + 1
+class CampRepository:
+    """จัดการข้อมูล camps"""
 
-    if locations:
-        return max(locations, key=locations.get)
-    return "None"
+    def create(self, camp_data: dict):
+        conn = get_connection()
+        if not conn: return None
+        if 'slots' in camp_data and 'available_slots' not in camp_data:
+            camp_data['available_slots'] = camp_data['slots']
+        try:
+            keys = ", ".join(camp_data.keys())
+            placeholders = ", ".join(["%s"] * len(camp_data))
+            with conn.cursor() as cur:
+                cur.execute(f"INSERT INTO camps ({keys}) VALUES ({placeholders})", list(camp_data.values()))
+                conn.commit()
+                return cur.lastrowid
+        except Exception as e:
+            print(f"❌ Create Camp Error: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def get_all(self):
+        conn = get_connection()
+        if not conn: return []
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM camps ORDER BY created_at DESC")
+                return cur.fetchall()
+        except Exception as e:
+            print(f"❌ Get All Camps Error: {e}")
+            return []
+        finally:
+            conn.close()
+
+
+class BookingRepository:
+    """จัดการข้อมูล bookings"""
+
+    def create_booking(self, user_id: int, camp_id: int):
+        conn = get_connection()
+        if not conn: return None
+        try:
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO bookings (user_id, camp_id) VALUES (%s, %s)", (user_id, camp_id))
+                conn.commit()
+                return cur.lastrowid
+        except Exception as e:
+            return {"error": str(e)}
+        finally:
+            conn.close()
+
+    def get_user_bookings(self, user_id: int):
+        """ดึง bookings ของ user พร้อมข้อมูล camp (JOIN)"""
+        conn = get_connection()
+        if not conn: return []
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT b.id, b.status, b.created_at AS booked_at,
+                           c.name AS camp_name, c.location, c.price,
+                           c.image_url, c.start_date, c.duration
+                    FROM bookings b
+                    JOIN camps c ON b.camp_id = c.id
+                    WHERE b.user_id = %s
+                    ORDER BY b.created_at DESC
+                """, (user_id,))
+                return cur.fetchall()
+        except Exception as e:
+            print(f"❌ Get User Bookings Error: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def get_user_stats(self, user_id: int):
+        """สถิติการจองของ user"""
+        conn = get_connection()
+        if not conn: return {}
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT
+                        COUNT(*) AS total_bookings,
+                        SUM(CASE WHEN b.status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
+                        SUM(CASE WHEN b.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+                        COALESCE(SUM(c.price), 0) AS total_spent
+                    FROM bookings b
+                    JOIN camps c ON b.camp_id = c.id
+                    WHERE b.user_id = %s
+                """, (user_id,))
+                return cur.fetchone()
+        except Exception as e:
+            print(f"❌ Get User Stats Error: {e}")
+            return {}
+        finally:
+            conn.close()
+
+
+# Global instances
+user_repo = UserRepository()
+camp_repo = CampRepository()
+booking_repo = BookingRepository()
