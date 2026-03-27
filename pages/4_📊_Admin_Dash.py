@@ -1,6 +1,18 @@
 import streamlit as st
-from utils.auth import check_auth_required, init_session_state
+from utils.auth import init_session_state, check_auth_required
 from database.crud import camp_repo, booking_repo
+
+# Page Config
+st.set_page_config(page_title="Admin Dashboard", page_icon="📊", layout="wide")
+
+init_session_state()
+check_auth_required()
+
+# Security Check: Ensure only admin can access
+user = st.session_state.user
+if user.get("role") != "admin":
+    st.error("⛔ คุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+    st.stop()
 
 class AdminDashboard:
     """
@@ -10,50 +22,20 @@ class AdminDashboard:
     def __init__(self):
         self.camps = camp_repo.get_all()
         self.bookings = [] # Future: booking_repo.get_all()
-        
+
     def render_stats(self):
         """Displays high-level metrics."""
         st.subheader("📈 System Overview")
+        # Example stats
         col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Total Camps", len(self.camps))
-        with col2:
-            st.metric("Total Bookings", "0") # Mock for now
-        with col3:
-            st.metric("Total Revenue", "฿0") # Mock for now
-
-    def render_management(self):
-        """Displays a table for managing camps."""
-        st.subheader("📋 Camp Management")
-        if not self.camps:
-            st.info("No camps found in the database.")
-        else:
-            # Display as a table
-            st.table(self.camps)
+        col1.metric("Total Camps", len(self.camps))
+        col2.metric("Total Bookings", 0) # Mock
+        col3.metric("Revenue", "$0") # Mock
 
     def render(self):
-        """Orchestrates the dashboard UI."""
-        st.title("📊 Admin Dashboard (Mock Data Mode)")
-        st.markdown("Welcome, Admin! Here you can monitor system activity and manage listings.")
-        
+        st.title("📊 Admin Dashboard")
         self.render_stats()
-        st.divider()
-        self.render_management()
-
-# --- Page Setup ---
-st.set_page_config(page_title="Admin Dash - Camping Project", page_icon="📊", layout="wide")
-
-init_session_state()
-
-# Security Check: Ensure only admin can access
-# For now, let's just check if logged in (mock)
-check_auth_required()
-
-# Future: Add role-based check
-# if st.session_state.user.get('role') != 'admin':
-#     st.error("Access Denied: Admins only.")
-#     st.stop()
+        # Additional admin logic here...
 
 # Instantiate and render
 dashboard = AdminDashboard()

@@ -1,80 +1,147 @@
-from database.connection import supabase
+from database.connection import get_connection
 
-class ProfileRepository:
-    """
-    Manages extra user information in the 'profiles' table.
-    Links to Supabase Auth via the user ID.
-    """
-    def __init__(self):
-        self.table_name = "profiles"
 
-    def create_profile(self, user_id, username, email, full_name=None):
-        """Creates a new profile linked to a Supabase Auth user."""
-        if not supabase: return None
-        data = {
-            "id": user_id,
-            "username": username,
-            "email": email,
-            "full_name": full_name,
-            "role": "user"
-        }
+class UserRepository:
+    """จัดการข้อมูล users"""
+
+    def create_user(self, username, email, password_hash, full_name=None, phone=None):
+        conn = get_connection()
+        if not conn: return None
         try:
-            return supabase.table(self.table_name).insert(data).execute()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO users (username, email, password_hash, full_name, phone) VALUES (%s, %s, %s, %s, %s)",
+                    (username, email, password_hash, full_name, phone)
+                )
+                conn.commit()
+                return cur.lastrowid
         except Exception as e:
-            print(f"❌ Profile Create Error: {e}")
+            print(f"❌ Create User Error: {e}")
             return None
+        finally:
+            conn.close()
 
-    def get_profile(self, user_id):
-        """Retrieves a profile by user ID."""
-        if not supabase: return None
+    def get_user_by_email(self, email):
+        conn = get_connection()
+        if not conn: return None
         try:
-            result = supabase.table(self.table_name).select("*").eq("id", user_id).maybe_single().execute()
-            return result.data
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+                return cur.fetchone()
         except Exception as e:
-            print(f"❌ Get Profile Error: {e}")
+            print(f"❌ Get User Error: {e}")
             return None
+        finally:
+            conn.close()
+
+    def get_user_by_id(self, user_id):
+        conn = get_connection()
+        if not conn: return None
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+                return cur.fetchone()
+        except Exception as e:
+            print(f"❌ Get User Error: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def update_user(self, user_id, **kwargs):
+        allowed = {"username", "full_name", "avatar_url", "bio", "role", "phone"}
+        data = {k: v for k, v in kwargs.items() if k in allowed}
+        if not data:
+            return None
+        conn = get_connection()
+        if not conn: return None
+        try:
+            sets = ", ".join(f"{k} = %s" for k in data)
+            vals = list(data.values()) + [user_id]
+            with conn.cursor() as cur:
+                cur.execute(f"UPDATE users SET {sets} WHERE id = %s", vals)
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"❌ Update User Error: {e}")
+            return None
+        finally:
+            conn.close()
+
 
 class CampRepository:
-    """Manages Camping Trip data in Supabase."""
-    def __init__(self):
-        self.table_name = "camps"
+    """จัดการข้อมูล camps"""
 
     def create(self, camp_data: dict):
-        """Inserts a new camp and sets available_slots."""
-        if not supabase: return None
+        conn = get_connection()
+        if not conn: return None
         if 'slots' in camp_data and 'available_slots' not in camp_data:
             camp_data['available_slots'] = camp_data['slots']
         try:
-            return supabase.table(self.table_name).insert(camp_data).execute()
+            keys = ", ".join(camp_data.keys())
+            placeholders = ", ".join(["%s"] * len(camp_data))
+            with conn.cursor() as cur:
+                cur.execute(f"INSERT INTO camps ({keys}) VALUES ({placeholders})", list(camp_data.values()))
+                conn.commit()
+                return cur.lastrowid
         except Exception as e:
             print(f"❌ Create Camp Error: {e}")
             return None
+        finally:
+            conn.close()
 
     def get_all(self):
-        """Retrieves all camp records."""
-        if not supabase: return []
+        conn = get_connection()
+        if not conn: return []
         try:
-            result = supabase.table(self.table_name).select("*").order("created_at", desc=True).execute()
-            return result.data
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM camps ORDER BY created_at DESC")
+                return cur.fetchall()
         except Exception as e:
-            print(f"❌ Get All Error: {e}")
+            print(f"❌ Get All Camps Error: {e}")
             return []
+        finally:
+            conn.close()
+
 
 class BookingRepository:
-    """Manages Bookings in Supabase."""
-    def __init__(self):
-        self.table_name = "bookings"
+    """จัดการข้อมูล bookings"""
 
-    def create_booking(self, user_id: str, camp_id: int):
-        """Creates a booking record. Slot reduction handled by SQL Trigger."""
-        if not supabase: return None
+    def create_booking(self, user_id: int, camp_id: int):
+        conn = get_connection()
+        if not conn: return None
         try:
-            data = {"user_id": user_id, "camp_id": camp_id}
-            return supabase.table(self.table_name).insert(data).execute()
+            with conn.cursor() as cur:
+                # เช็ค slot ว่างก่อน
+                cur.execute("SELECT available_slots FROM camps WHERE id = %s", (camp_id,))
+                camp = cur.fetchone()
+                if not camp or camp["available_slots"] <= 0:
+                    return {"error": "ทริปนี้เต็มแล้ว"}
+                # สร้าง booking + ลด slot
+                cur.execute("INSERT INTO bookings (user_id, camp_id) VALUES (%s, %s)", (user_id, camp_id))
+                cur.execute("UPDATE camps SET available_slots = available_slots - 1 WHERE id = %s", (camp_id,))
+                conn.commit()
+                return cur.lastrowid
         except Exception as e:
+            conn.rollback()
             return {"error": str(e)}
+        finally:
+            conn.close()
+
+    def get_user_bookings(self, user_id: int):
+        conn = get_connection()
+        if not conn: return []
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT camp_id FROM bookings WHERE user_id = %s", (user_id,))
+                return [row["camp_id"] for row in cur.fetchall()]
+        except Exception as e:
+            print(f"❌ Get User Bookings Error: {e}")
+            return []
+        finally:
+            conn.close()
+
 
 # Global instances
-profile_repo = ProfileRepository()
+user_repo = UserRepository()
 camp_repo = CampRepository()
 booking_repo = BookingRepository()
