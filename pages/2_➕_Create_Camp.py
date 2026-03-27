@@ -1,5 +1,6 @@
 import streamlit as st
 from components.forms import CampForm
+from database.crud import camp_repo
 
 st.set_page_config(page_title="Create Camp", page_icon="➕", layout="centered")
 
@@ -48,27 +49,25 @@ form = CampForm()
 result = form.render()
 
 if result:
-    # Mock: เก็บลง session_state (จะเปลี่ยนเป็น database จริงตอน merge)
-    if "mock_camps" not in st.session_state:
-        st.session_state.mock_camps = []
-    st.session_state.mock_camps.append(result)
+    try:
+        camp_id = camp_repo.create(result)
+        st.balloons()
+        st.success(f"🎉 สร้างทริป **{result['name']}** สำเร็จ! (ID: {camp_id})")
+    except Exception as e:
+        st.error(f"❌ เกิดข้อผิดพลาด: {e}")
 
-    st.balloons()
-    st.success(f"🎉 สร้างทริป **{result['name']}** สำเร็จ!")
-
-    with st.expander("📄 ดูข้อมูลที่ส่ง", expanded=False):
-        st.json(result)
-
-# ── แสดงทริปที่สร้างแล้ว (Mock) ──
-if st.session_state.get("mock_camps"):
+# ── แสดงทริปที่สร้างแล้ว ──
+camps = camp_repo.get_all()
+if camps:
     st.divider()
-    st.subheader(f"📋 ทริปที่สร้างแล้ว ({len(st.session_state.mock_camps)} ทริป)")
-    for i, camp in enumerate(reversed(st.session_state.mock_camps)):
-        with st.expander(f"🏕️ {camp['name']} — {camp['location']} | ฿{camp['price']:,}/คน"):
+    st.subheader(f"📋 ทริปทั้งหมด ({len(camps)} ทริป)")
+    for camp in camps:
+        price = camp.get("price", 0) or 0
+        with st.expander(f"🏕️ {camp['name']} — {camp['location']} | ฿{price:,.0f}/คน"):
             col1, col2, col3 = st.columns(3)
-            col1.metric("📅 วันเริ่ม", camp["start_date"])
-            col2.metric("⏱️ จำนวนวัน", f"{camp['duration']} วัน")
-            col3.metric("👥 รับได้", f"{camp['slots']} คน")
+            col1.metric("📅 วันเริ่ม", str(camp.get("start_date", "")))
+            col2.metric("⏱️ จำนวนวัน", f"{camp.get('duration', '-')} วัน")
+            col3.metric("👥 รับได้", f"{camp.get('available_slots', camp.get('slots', '-'))} คน")
             if camp.get("description"):
                 st.write(camp["description"])
             if camp.get("contact"):
