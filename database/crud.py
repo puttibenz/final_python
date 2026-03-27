@@ -128,6 +128,7 @@ class BookingRepository:
             conn.close()
 
     def get_user_bookings(self, user_id: int):
+        """ดึง camp_id ที่ user จองไว้ (สำหรับ Explore page)"""
         conn = get_connection()
         if not conn: return []
         try:
@@ -137,6 +138,51 @@ class BookingRepository:
         except Exception as e:
             print(f"❌ Get User Bookings Error: {e}")
             return []
+        finally:
+            conn.close()
+
+    def get_user_bookings_detail(self, user_id: int):
+        """ดึง bookings ของ user พร้อมข้อมูล camp (สำหรับ Profile page)"""
+        conn = get_connection()
+        if not conn: return []
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT b.id, b.status, b.created_at AS booked_at,
+                           c.name AS camp_name, c.location, c.price,
+                           c.image_url, c.start_date, c.duration
+                    FROM bookings b
+                    JOIN camps c ON b.camp_id = c.id
+                    WHERE b.user_id = %s
+                    ORDER BY b.created_at DESC
+                """, (user_id,))
+                return cur.fetchall()
+        except Exception as e:
+            print(f"❌ Get User Bookings Detail Error: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def get_user_stats(self, user_id: int):
+        """สถิติการจองของ user"""
+        conn = get_connection()
+        if not conn: return {}
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT
+                        COUNT(*) AS total_bookings,
+                        SUM(CASE WHEN b.status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
+                        SUM(CASE WHEN b.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+                        COALESCE(SUM(c.price), 0) AS total_spent
+                    FROM bookings b
+                    JOIN camps c ON b.camp_id = c.id
+                    WHERE b.user_id = %s
+                """, (user_id,))
+                return cur.fetchone()
+        except Exception as e:
+            print(f"❌ Get User Stats Error: {e}")
+            return {}
         finally:
             conn.close()
 
