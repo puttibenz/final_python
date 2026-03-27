@@ -1,109 +1,80 @@
-# database/crud.py
-import gspread
+from database.connection import supabase
 
-class DatabaseCRUD:
-    def __init__(self, sh):
-        self.sh = sh
-        self.camp_sheet = self.sh.worksheet("Camp")
-        self.users_sheet = self.sh.worksheet("Users")
-        self.booking_sheet = self.sh.worksheet("Booking")
-        
-        try:
-            self.payment_sheet = self.sh.worksheet("Payments")
-        except gspread.exceptions.WorksheetNotFound:
-            self.payment_sheet = None
+class ProfileRepository:
+    """
+    Manages extra user information in the 'profiles' table.
+    Links to Supabase Auth via the user ID.
+    """
+    def __init__(self):
+        self.table_name = "profiles"
 
-    # ==========================================
-    # หมวดหมู่: Camp
-    # ==========================================
-    def get_all_camps(self):
+    def create_profile(self, user_id, username, email, full_name=None):
+        """Creates a new profile linked to a Supabase Auth user."""
+        if not supabase: return None
+        data = {
+            "id": user_id,
+            "username": username,
+            "email": email,
+            "full_name": full_name,
+            "role": "user"
+        }
         try:
-            return self.camp_sheet.get_all_values()
+            return supabase.table(self.table_name).insert(data).execute()
         except Exception as e:
-            print(f"❌ ดึงข้อมูล Camps ไม่สำเร็จ: {e}")
+            print(f"❌ Profile Create Error: {e}")
+            return None
+
+    def get_profile(self, user_id):
+        """Retrieves a profile by user ID."""
+        if not supabase: return None
+        try:
+            result = supabase.table(self.table_name).select("*").eq("id", user_id).maybe_single().execute()
+            return result.data
+        except Exception as e:
+            print(f"❌ Get Profile Error: {e}")
+            return None
+
+class CampRepository:
+    """Manages Camping Trip data in Supabase."""
+    def __init__(self):
+        self.table_name = "camps"
+
+    def create(self, camp_data: dict):
+        """Inserts a new camp and sets available_slots."""
+        if not supabase: return None
+        if 'slots' in camp_data and 'available_slots' not in camp_data:
+            camp_data['available_slots'] = camp_data['slots']
+        try:
+            return supabase.table(self.table_name).insert(camp_data).execute()
+        except Exception as e:
+            print(f"❌ Create Camp Error: {e}")
+            return None
+
+    def get_all(self):
+        """Retrieves all camp records."""
+        if not supabase: return []
+        try:
+            result = supabase.table(self.table_name).select("*").order("created_at", desc=True).execute()
+            return result.data
+        except Exception as e:
+            print(f"❌ Get All Error: {e}")
             return []
 
-    def add_new_camp(self, camp_data):
-        try:
-            self.camp_sheet.append_row(camp_data)
-            return True
-        except Exception as e:
-            print(f"❌ เพิ่มข้อมูล Camp ไม่สำเร็จ: {e}")
-            return False
+class BookingRepository:
+    """Manages Bookings in Supabase."""
+    def __init__(self):
+        self.table_name = "bookings"
 
-    def delete_camp(self, row_index):
+    def create_booking(self, user_id: str, camp_id: int):
+        """Creates a booking record. Slot reduction handled by SQL Trigger."""
+        if not supabase: return None
         try:
-            self.camp_sheet.delete_rows(row_index)
-            return True
+            data = {"user_id": user_id, "camp_id": camp_id}
+            return supabase.table(self.table_name).insert(data).execute()
         except Exception as e:
-            print(f"❌ ลบค่ายไม่สำเร็จ: {e}")
-            return False
+            return {"error": str(e)}
 
-    def update_camp(self, row_index, camp_data):
-        try:
-            end_col_letter = chr(64 + len(camp_data)) 
-            cell_range = f"A{row_index}:{end_col_letter}{row_index}"
-            self.camp_sheet.update(range_name=cell_range, values=[camp_data])
-            return True
-        except Exception as e:
-            print(f"❌ แก้ไขค่ายไม่สำเร็จ: {e}")
-            return False
-
-    # ==========================================
-    # หมวดหมู่: Users
-    # ==========================================
-    def get_all_users(self):
-        try:
-            return self.users_sheet.get_all_values()
-        except Exception as e:
-            print(f"❌ ดึงข้อมูล Users ไม่สำเร็จ: {e}")
-            return []
-
-    def add_new_user(self, user_data):
-        try:
-            self.users_sheet.append_row(user_data)
-            return True
-        except Exception as e:
-            print(f"❌ เพิ่มข้อมูล User ไม่สำเร็จ: {e}")
-            return False
-
-    # ==========================================
-    # หมวดหมู่: Bookings
-    # ==========================================
-    def get_all_bookings(self):
-        try:
-            return self.booking_sheet.get_all_values()
-        except Exception as e:
-            print(f"❌ ดึงข้อมูล Bookings ไม่สำเร็จ: {e}")
-            return []
-
-    def add_new_booking(self, booking_data):
-        try:
-            self.booking_sheet.append_row(booking_data)
-            return True
-        except Exception as e:
-            print(f"❌ เพิ่มข้อมูล Booking ไม่สำเร็จ: {e}")
-            return False
-
-    # ==========================================
-    # หมวดหมู่: Payments
-    # ==========================================
-    def get_all_payments(self):
-        try:
-            if not self.payment_sheet:
-                return []
-            return self.payment_sheet.get_all_values()
-        except Exception as e:
-            print(f"❌ ดึงข้อมูล Payments ไม่สำเร็จ: {e}")
-            return []
-
-    def add_new_payment(self, payment_data):
-        try:
-            if not self.payment_sheet:
-                print("⚠️ Worksheet 'Payment' ไม่พบในฐานข้อมูล")
-                return False
-            self.payment_sheet.append_row(payment_data)
-            return True
-        except Exception as e:
-            print(f"❌ เพิ่มข้อมูล Payment ไม่สำเร็จ: {e}")
-            return False
+# Global instances
+profile_repo = ProfileRepository()
+camp_repo = CampRepository()
+booking_repo = BookingRepository()

@@ -1,25 +1,33 @@
 import os
-import gspread
+from supabase import create_client, Client
 from dotenv import load_dotenv
-from pathlib import Path
 
-# หาที่อยู่ของโฟลเดอร์หลักอัตโนมัติ และชี้ไปที่ไฟล์ .env
-BASE_DIR = Path(__file__).resolve().parent.parent
-env_path = os.path.join(BASE_DIR, '.env')
+load_dotenv()
 
-# โหลดไฟล์ .env จาก Path ที่กำหนดอย่างเจาะจง
-load_dotenv(dotenv_path=env_path)
+class SupabaseManager:
+    """
+    A class to manage the connection to Supabase.
+    Uses the Singleton pattern to ensure only one client exists.
+    """
+    _client: Client = None
 
-def get_db_connection():
-    cred_path = os.getenv("GOOGLE_CRED_PATH")
-    if not cred_path:
-        raise ValueError("❌ ไม่พบ GOOGLE_CRED_PATH ในไฟล์ .env")
+    def __init__(self):
+        self.url = os.getenv("SUPABASE_URL")
+        self.key = os.getenv("SUPABASE_KEY")
+        
+        if not self.url or not self.key:
+            print("⚠️ Warning: SUPABASE_URL or SUPABASE_KEY not found in .env file.")
 
-    try:
-        gc = gspread.service_account(filename=cred_path)
-        sh = gc.open("Database_camp")
-        print("✅ เชื่อมต่อ Google Sheets สำเร็จ!")
-        return sh
-    except Exception as e:
-        print(f"❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: {e}")
-        raise
+    def get_client(self) -> Client:
+        """Returns the Supabase client, initializing it if necessary."""
+        if not self._client and self.url and self.key:
+            try:
+                self._client = create_client(self.url, self.key)
+                print("✅ Supabase client initialized successfully.")
+            except Exception as e:
+                print(f"❌ Error initializing Supabase client: {e}")
+        return self._client
+
+# Create a global instance
+db_manager = SupabaseManager()
+supabase = db_manager.get_client()
