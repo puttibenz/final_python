@@ -53,6 +53,7 @@ result = form.render()
 
 if result:
     try:
+        result["created_by"] = st.session_state.user["id"]
         camp_id = camp_repo.create(result)
         st.balloons()
         st.success(f"🎉 สร้างทริป **{result['name']}** สำเร็จ! (ID: {camp_id})")
