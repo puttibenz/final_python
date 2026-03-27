@@ -66,5 +66,5 @@ def logout():
 def check_auth_required():
     """Call this on pages that require a login."""
     if not st.session_state.get("is_logged_in", False):
-        st.warning("กรุณาเข้าสู่ระบบก่อนใช้งานหน้านี้")
-        st.stop()
+        st.warning("กรุณาเข้าสู่ระบบก่อนใช้งาน")
+        st.switch_page("main.py")

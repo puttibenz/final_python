@@ -2,8 +2,11 @@ import streamlit as st
 import json
 import os
 from components.camp_card import CampCard
+from utils.auth import init_session_state, check_auth_required
 
 st.set_page_config(page_title="Explore Camps - Camping Project", page_icon="🏕️", layout="wide")
+init_session_state()
+check_auth_required()
 
 st.title("🏕️ Discover Your Next Adventure")
 st.markdown("Explore the best camping trips from across the community. (Mock Data Mode)")
