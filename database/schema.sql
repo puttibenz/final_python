@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
     bio TEXT,
     role ENUM('user', 'admin') NOT NULL DEFAULT 'user',
     phone VARCHAR(20),
+    balance DECIMAL(15, 2) DEFAULT 0.00,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -42,7 +43,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     camp_id INT NOT NULL,
-    status VARCHAR(20) DEFAULT 'confirmed',
+    status ENUM('pending_payment', 'confirmed', 'cancelled', 'completed') DEFAULT 'pending_payment',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (camp_id) REFERENCES camps(id) ON DELETE CASCADE

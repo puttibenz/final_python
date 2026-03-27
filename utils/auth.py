@@ -2,69 +2,106 @@ import streamlit as st
 import bcrypt
 from database.crud import user_repo
 
+class AuthManager:
+    """Class สำหรับจัดการ Authentication และ User Session (OOP Version)"""
 
-def init_session_state():
-    """Initialize session state for auth."""
-    if "is_logged_in" not in st.session_state:
+    def __init__(self):
+        """Initialize session state อัตโนมัติเมื่อมีการสร้าง instance"""
+        self.init_session_state()
+
+    def init_session_state(self):
+        """ตั้งค่าเริ่มต้นให้กับ st.session_state"""
+        if "is_logged_in" not in st.session_state:
+            st.session_state.is_logged_in = False
+        if "user" not in st.session_state:
+            st.session_state.user = None
+
+    def _hash_password(self, password: str) -> str:
+        """เข้ารหัสผ่าน (Private Method)"""
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    def _verify_password(self, password: str, hashed: str) -> bool:
+        """ตรวจสอบความถูกต้องของรหัสผ่าน (Private Method)"""
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+
+    def login(self, email: str, password: str) -> tuple[bool, str]:
+        """ตรวจสอบข้อมูลการล็อกอินและบันทึกลง Session"""
+        try:
+            user = user_repo.get_user_by_email(email)
+            if not user:
+                return False, "ไม่พบอีเมลนี้ในระบบ"
+            
+            if not self._verify_password(password, user["password_hash"]):
+                return False, "รหัสผ่านไม่ถูกต้อง"
+            
+            # บันทึกสถานะการล็อกอินลงใน Streamlit Session
+            st.session_state.is_logged_in = True
+            st.session_state.user = {
+                "id": user["id"],
+                "username": user["username"],
+                "email": user["email"],
+                "full_name": user.get("full_name"),
+                "role": user.get("role", "user"),
+                "phone": user.get("phone"),
+            }
+            return True, "เข้าสู่ระบบสำเร็จ!"
+        except Exception as e:
+            return False, f"เกิดข้อผิดพลาด: {str(e)}"
+
+    def register(self, username: str, email: str, password: str, full_name: str = None, phone: str = None) -> tuple[bool, str]:
+        """ลงทะเบียนผู้ใช้ใหม่"""
+        try:
+            existing = user_repo.get_user_by_email(email)
+            if existing:
+                return False, "อีเมลนี้ถูกใช้งานแล้ว"
+            
+            hashed_pw = self._hash_password(password)
+            user_id = user_repo.create_user(username, email, hashed_pw, full_name, phone)
+            
+            if user_id:
+                return True, "สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ"
+            return False, "เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่"
+        except Exception as e:
+            return False, f"เกิดข้อผิดพลาด: {str(e)}"
+
+    def logout(self):
+        """ออกจากระบบและล้าง Session"""
         st.session_state.is_logged_in = False
-    if "user" not in st.session_state:
         st.session_state.user = None
+        st.rerun()
+
+    def check_auth_required(self, redirect_page: str = "main.py"):
+        """Middleware ตรวจสอบว่าต้องล็อกอินก่อนถึงจะเข้าถึงหน้านี้ได้"""
+        if not st.session_state.get("is_logged_in", False):
+            st.warning("กรุณาเข้าสู่ระบบก่อนใช้งาน")
+            st.switch_page(redirect_page)
+
+    @property
+    def current_user(self):
+        """Helper ดึงข้อมูลผู้ใช้ปัจจุบัน"""
+        return st.session_state.get("user")
+
+    @property
+    def is_logged_in(self) -> bool:
+        """Helper เช็คว่าล็อกอินอยู่หรือไม่"""
+        return st.session_state.get("is_logged_in", False)
 
 
-def _hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+# สร้าง Global Instance เพื่อความสะดวกในการใช้งานข้ามไฟล์
+auth_manager = AuthManager()
 
-
-def _verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
-
+# Bridge Functions เพื่อรองรับ Code เก่า (หากต้องการเปลี่ยนทีเดียวให้ข้ามส่วนนี้)
+def init_session_state():
+    auth_manager.init_session_state()
 
 def login(email, password):
-    """Login ด้วย email + password ตรวจกับ MySQL."""
-    try:
-        user = user_repo.get_user_by_email(email)
-        if not user:
-            return False, "ไม่พบอีเมลนี้ในระบบ"
-        if not _verify_password(password, user["password_hash"]):
-            return False, "รหัสผ่านไม่ถูกต้อง"
-        st.session_state.is_logged_in = True
-        st.session_state.user = {
-            "id": user["id"],
-            "username": user["username"],
-            "email": user["email"],
-            "full_name": user["full_name"],
-            "role": user["role"],
-            "phone": user["phone"],
-        }
-        return True, "เข้าสู่ระบบสำเร็จ!"
-    except Exception as e:
-        return False, str(e)
-
+    return auth_manager.login(email, password)
 
 def register(username, email, password, full_name=None, phone=None):
-    """สมัครสมาชิก — hash password แล้วเก็บลง MySQL."""
-    try:
-        existing = user_repo.get_user_by_email(email)
-        if existing:
-            return False, "อีเมลนี้ถูกใช้งานแล้ว"
-        hashed = _hash_password(password)
-        user_id = user_repo.create_user(username, email, hashed, full_name, phone)
-        if user_id:
-            return True, "สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ"
-        return False, "เกิดข้อผิดพลาด กรุณาลองใหม่"
-    except Exception as e:
-        return False, str(e)
-
+    return auth_manager.register(username, email, password, full_name, phone)
 
 def logout():
-    """Clear session."""
-    st.session_state.is_logged_in = False
-    st.session_state.user = None
-    st.rerun()
-
+    auth_manager.logout()
 
 def check_auth_required():
-    """Call this on pages that require a login."""
-    if not st.session_state.get("is_logged_in", False):
-        st.warning("กรุณาเข้าสู่ระบบก่อนใช้งาน")
-        st.switch_page("main.py")
+    auth_manager.check_auth_required()

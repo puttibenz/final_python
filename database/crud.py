@@ -48,7 +48,7 @@ class UserRepository:
             conn.close()
 
     def update_user(self, user_id, **kwargs):
-        allowed = {"username", "full_name", "avatar_url", "bio", "role", "phone"}
+        allowed = {"username", "full_name", "avatar_url", "bio", "role", "phone", "balance"}
         data = {k: v for k, v in kwargs.items() if k in allowed}
         if not data:
             return None
@@ -111,16 +111,24 @@ class BookingRepository:
         if not conn: return None
         try:
             with conn.cursor() as cur:
-                # เช็ค slot ว่างก่อน
+                # 1. เช็คว่าเคยจองไปหรือยัง
+                cur.execute("SELECT id FROM bookings WHERE user_id = %s AND camp_id = %s AND status != 'cancelled'", (user_id, camp_id))
+                if cur.fetchone():
+                    return {"error": "คุณได้จองทริปนี้ไปแล้ว"}
+
+                # 2. เช็ค slot ว่างก่อน
                 cur.execute("SELECT available_slots FROM camps WHERE id = %s", (camp_id,))
                 camp = cur.fetchone()
                 if not camp or camp["available_slots"] <= 0:
                     return {"error": "ทริปนี้เต็มแล้ว"}
-                # สร้าง booking + ลด slot
+                
+                # 3. สร้าง booking + ลด slot
                 cur.execute("INSERT INTO bookings (user_id, camp_id) VALUES (%s, %s)", (user_id, camp_id))
+                booking_id = cur.lastrowid
+                
                 cur.execute("UPDATE camps SET available_slots = available_slots - 1 WHERE id = %s", (camp_id,))
                 conn.commit()
-                return cur.lastrowid
+                return booking_id
         except Exception as e:
             conn.rollback()
             return {"error": str(e)}
@@ -174,7 +182,8 @@ class BookingRepository:
                         COUNT(*) AS total_bookings,
                         SUM(CASE WHEN b.status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
                         SUM(CASE WHEN b.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
-                        COALESCE(SUM(c.price), 0) AS total_spent
+                        SUM(CASE WHEN b.status = 'completed' THEN 1 ELSE 0 END) AS completed,
+                        COALESCE(SUM(CASE WHEN b.status != 'cancelled' THEN c.price ELSE 0 END), 0) AS total_spent
                     FROM bookings b
                     JOIN camps c ON b.camp_id = c.id
                     WHERE b.user_id = %s
@@ -183,6 +192,110 @@ class BookingRepository:
         except Exception as e:
             print(f"❌ Get User Stats Error: {e}")
             return {}
+        finally:
+            conn.close()
+
+    def get_all_bookings_detail(self):
+        """ดึง bookings ทั้งหมดพร้อมข้อมูล camp และ user (สำหรับ Admin)"""
+        conn = get_connection()
+        if not conn: return []
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT b.id, b.status, b.created_at AS booked_at,
+                           c.name AS camp_name, c.price, u.username, u.email
+                    FROM bookings b
+                    JOIN camps c ON b.camp_id = c.id
+                    JOIN users u ON b.user_id = u.id
+                    ORDER BY b.created_at DESC
+                """)
+                return cur.fetchall()
+        except Exception as e:
+            print(f"❌ Get All Bookings Detail Error: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def get_booking_by_id(self, booking_id: int):
+        """ดึงข้อมูล booking ตาม ID พร้อมข้อมูล camp"""
+        conn = get_connection()
+        if not conn: return None
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT b.*, c.name AS camp_name, c.price, c.created_by AS owner_id
+                    FROM bookings b
+                    JOIN camps c ON b.camp_id = c.id
+                    WHERE b.id = %s
+                """, (booking_id,))
+                return cur.fetchone()
+        except Exception as e:
+            print(f"❌ Get Booking By ID Error: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def complete_payment(self, booking_id: int):
+        """ยืนยันการชำระเงิน และโอนเงินให้เจ้าของแคมป์ (Mock)"""
+        conn = get_connection()
+        if not conn: 
+            print("❌ Complete Payment Error: No database connection")
+            return False
+        try:
+            with conn.cursor() as cur:
+                # 1. ดึงข้อมูล booking และราคา
+                cur.execute("""
+                    SELECT b.id, b.status, c.price, c.created_by AS owner_id
+                    FROM bookings b
+                    JOIN camps c ON b.camp_id = c.id
+                    WHERE b.id = %s
+                """, (booking_id,))
+                booking = cur.fetchone()
+
+                if not booking:
+                    print(f"❌ Complete Payment Error: Booking ID {booking_id} not found")
+                    return False
+                
+                if booking['status'] != 'pending_payment':
+                    print(f"❌ Complete Payment Error: Booking status is '{booking['status']}', expected 'pending_payment'")
+                    return False
+
+                # 2. อัปเดตสถานะ booking เป็น confirmed
+                cur.execute("UPDATE bookings SET status = 'confirmed' WHERE id = %s", (booking_id,))
+
+                # 3. โอนเงินให้เจ้าของ (เพิ่ม balance)
+                if booking['owner_id']:
+                    # Ensure balance column exists and price is numeric
+                    cur.execute("UPDATE users SET balance = balance + %s WHERE id = %s", (booking['price'] or 0, booking['owner_id']))
+
+                conn.commit()
+                return True
+        except Exception as e:
+            if conn: conn.rollback()
+            print(f"❌ Complete Payment Error Exception: {e}")
+            return False
+        finally:
+            if conn: conn.close()
+
+    def update_booking_status(self, booking_id: int, status: str):
+        """อัปเดตสถานะการจอง (confirmed, cancelled, completed)"""
+        conn = get_connection()
+        if not conn: return False
+        try:
+            with conn.cursor() as cur:
+                # ถ้าเปลี่ยนเป็น cancelled ให้คืน slot
+                if status == 'cancelled':
+                    cur.execute("SELECT status, camp_id FROM bookings WHERE id = %s", (booking_id,))
+                    booking = cur.fetchone()
+                    if booking and booking['status'] != 'cancelled':
+                        cur.execute("UPDATE camps SET available_slots = available_slots + 1 WHERE id = %s", (booking['camp_id'],))
+                
+                cur.execute("UPDATE bookings SET status = %s WHERE id = %s", (status, booking_id))
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"❌ Update Booking Status Error: {e}")
+            return False
         finally:
             conn.close()
 

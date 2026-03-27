@@ -7,7 +7,7 @@ class CampCard:
     def __init__(self, data: dict):
         self.data = data
 
-    def render(self, booked=False):
+    def render(self, booked=False, user_id=None):
         camp = self.data
         camp_id = camp.get("id", 0)
         name = camp.get("name", "ไม่มีชื่อ")
@@ -19,6 +19,7 @@ class CampCard:
         description = camp.get("description", "")
         contact = camp.get("contact", "")
         start_date = camp.get("start_date", "")
+        created_by = camp.get("created_by")
 
         with st.container():
             st.markdown(f"""
@@ -48,6 +49,8 @@ class CampCard:
             # ── ปุ่มจอง ──
             if booked:
                 st.success("✅ จองแล้ว")
+            elif user_id and created_by == user_id:
+                st.info("🏠 ทริปที่คุณสร้าง")
             elif slots <= 0:
                 st.error("❌ เต็มแล้ว")
             else:

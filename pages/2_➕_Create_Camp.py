@@ -1,11 +1,10 @@
 import streamlit as st
 from components.forms import CampForm
 from database.crud import camp_repo
-from utils.auth import init_session_state, check_auth_required
+from utils.auth import auth_manager
 
 st.set_page_config(page_title="Create Camp", page_icon="➕", layout="centered")
-init_session_state()
-check_auth_required()
+auth_manager.check_auth_required()
 
 # ── Custom CSS ──
 st.markdown("""

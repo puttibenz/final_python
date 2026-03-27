@@ -1,8 +1,8 @@
 import streamlit as st
-from utils.auth import init_session_state, login, register, logout
+from utils.auth import auth_manager
 
 st.set_page_config(page_title="Camping Trip 🏕️", page_icon="🏕️", layout="centered")
-init_session_state()
+auth_manager.init_session_state()
 
 # ── ซ่อน sidebar navigation ถ้ายังไม่ login ──
 if not st.session_state.get("is_logged_in"):
@@ -39,7 +39,7 @@ if not st.session_state.get("is_logged_in"):
                         st.warning("⚠️ กรุณากรอกข้อมูลให้ครบ")
                     else:
                         with st.spinner("กำลังตรวจสอบ..."):
-                            success, msg = login(l_email, l_password)
+                            success, msg = auth_manager.login(l_email, l_password)
                             if success:
                                 st.success(msg)
                                 st.rerun()
@@ -65,7 +65,7 @@ if not st.session_state.get("is_logged_in"):
                         st.warning("⚠️ รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร")
                     else:
                         with st.spinner("กำลังสมัครสมาชิก..."):
-                            success, msg = register(r_username, r_email, r_password, r_fullname or None, r_phone or None)
+                            success, msg = auth_manager.register(r_username, r_email, r_password, r_fullname or None, r_phone or None)
                             if success:
                                 st.success(f"✅ {msg}")
                             else:
@@ -84,7 +84,7 @@ with st.sidebar:
     st.caption(f"🏷️ สิทธิ์: {user.get('role', 'user')}")
     st.divider()
     if st.button("🚪 ออกจากระบบ", use_container_width=True):
-        logout()
+        auth_manager.logout()
 
 st.markdown("""
 <div style="text-align:center; padding: 2rem 0;">
