@@ -48,7 +48,7 @@ with col2:
 st.markdown("---")
 st.subheader("📋 ประวัติการจอง")
 
-bookings = booking_repo.get_user_bookings(user_id)
+bookings = booking_repo.get_user_bookings_detail(user_id)
 
 if not bookings:
     st.info("ยังไม่มีประวัติการจอง")

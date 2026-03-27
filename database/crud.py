@@ -111,16 +111,38 @@ class BookingRepository:
         if not conn: return None
         try:
             with conn.cursor() as cur:
+                # เช็ค slot ว่างก่อน
+                cur.execute("SELECT available_slots FROM camps WHERE id = %s", (camp_id,))
+                camp = cur.fetchone()
+                if not camp or camp["available_slots"] <= 0:
+                    return {"error": "ทริปนี้เต็มแล้ว"}
+                # สร้าง booking + ลด slot
                 cur.execute("INSERT INTO bookings (user_id, camp_id) VALUES (%s, %s)", (user_id, camp_id))
+                cur.execute("UPDATE camps SET available_slots = available_slots - 1 WHERE id = %s", (camp_id,))
                 conn.commit()
                 return cur.lastrowid
         except Exception as e:
+            conn.rollback()
             return {"error": str(e)}
         finally:
             conn.close()
 
     def get_user_bookings(self, user_id: int):
-        """ดึง bookings ของ user พร้อมข้อมูล camp (JOIN)"""
+        """ดึง camp_id ที่ user จองไว้ (สำหรับ Explore page)"""
+        conn = get_connection()
+        if not conn: return []
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT camp_id FROM bookings WHERE user_id = %s", (user_id,))
+                return [row["camp_id"] for row in cur.fetchall()]
+        except Exception as e:
+            print(f"❌ Get User Bookings Error: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def get_user_bookings_detail(self, user_id: int):
+        """ดึง bookings ของ user พร้อมข้อมูล camp (สำหรับ Profile page)"""
         conn = get_connection()
         if not conn: return []
         try:
@@ -136,7 +158,7 @@ class BookingRepository:
                 """, (user_id,))
                 return cur.fetchall()
         except Exception as e:
-            print(f"❌ Get User Bookings Error: {e}")
+            print(f"❌ Get User Bookings Detail Error: {e}")
             return []
         finally:
             conn.close()
