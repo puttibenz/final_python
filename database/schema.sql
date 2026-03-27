@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     full_name VARCHAR(255),
     avatar_url TEXT,
     bio TEXT,
-    role VARCHAR(20) DEFAULT 'user',
+    role ENUM('user', 'admin') NOT NULL DEFAULT 'user',
     phone VARCHAR(20),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
