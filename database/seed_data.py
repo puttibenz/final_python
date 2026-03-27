@@ -73,8 +73,16 @@ def seed_database():
     print("="*30)
 
 if __name__ == "__main__":
-    confirm = input("⚠️ Start seeding data into Supabase? (yes/no): ")
-    if confirm.lower() == 'yes':
+    # Check if --yes or -y is passed to skip confirmation
+    force = False
+    if len(sys.argv) > 1 and sys.argv[1] in ['--yes', '-y']:
+        force = True
+
+    if force:
         seed_database()
     else:
-        print("Cancelled.")
+        confirm = input("⚠️ Start seeding data into Supabase? (yes/no): ")
+        if confirm.lower() == 'yes':
+            seed_database()
+        else:
+            print("Cancelled.")

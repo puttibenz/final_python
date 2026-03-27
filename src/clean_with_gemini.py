@@ -11,18 +11,20 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 model = genai.GenerativeModel('gemini-2.0-flash')
 
-def clean_raw_data_with_ai():
-    # เปลี่ยนมาอ่านจาก Raw Data
-    input_file = 'apify_raw_data.json'
-    output_file = 'final_camps_cleaned.json'
+def clean_raw_data_with_ai(raw_data=None, input_file='apify_raw_data.json', output_file='final_camps_cleaned.json', save_to_file=True):
+    # หากไม่ได้ส่ง raw_data มา ให้ลองอ่านจากไฟล์
+    if raw_data is None:
+        if not os.path.exists(input_file):
+            print(f"❌ ไม่พบไฟล์ {input_file}")
+            return []
+        
+        print(f"📖 กำลังอ่าน Raw Data จาก {input_file}...")
+        with open(input_file, 'r', encoding='utf-8') as f:
+            raw_data = json.load(f)
 
-    if not os.path.exists(input_file):
-        print(f"❌ ไม่พบไฟล์ {input_file}")
-        return
-
-    print(f"📖 กำลังอ่าน Raw Data จาก {input_file}...")
-    with open(input_file, 'r', encoding='utf-8') as f:
-        raw_data = json.load(f)
+    if not raw_data:
+        print("⚠️ ไม่มีข้อมูลให้ประมวลผล")
+        return []
 
     print(f"🧠 กำลังใช้ AI สกัดและคลีนข้อมูล {len(raw_data)} รายการ...")
 
@@ -66,6 +68,9 @@ def clean_raw_data_with_ai():
             raw_text = response.text.strip()
             if "```json" in raw_text:
                 raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in raw_text:
+                # Handle cases where it's just ``` without 'json'
+                raw_text = raw_text.split("```")[1].split("```")[0].strip()
             
             cleaned_batch = json.loads(raw_text)
             cleaned_results.extend(cleaned_batch)
@@ -77,11 +82,13 @@ def clean_raw_data_with_ai():
         except Exception as e:
             print(f"⚠️ เกิดข้อผิดพลาดในรอบนี้: {e}")
 
-    # บันทึกเป็นไฟล์ใหม่ที่คลีนแล้ว
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(cleaned_results, f, ensure_ascii=False, indent=2)
+    # บันทึกเป็นไฟล์ใหม่ที่คลีนแล้ว (ถ้าต้องการ)
+    if save_to_file:
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(cleaned_results, f, ensure_ascii=False, indent=2)
+        print(f"\n✨ เสร็จสมบูรณ์! ข้อมูลถูกคลีนและบันทึกไว้ที่ {output_file}")
     
-    print(f"\n✨ เสร็จสมบูรณ์! ข้อมูลถูกคลีนและบันทึกไว้ที่ {output_file}")
+    return cleaned_results
 
 if __name__ == "__main__":
     clean_raw_data_with_ai()
