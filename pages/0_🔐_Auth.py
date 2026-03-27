@@ -2,15 +2,17 @@ import streamlit as st
 from utils.auth import init_session_state, login, register
 
 # Set page config
-st.set_page_config(page_title="Auth - Camping Project", page_icon="🔐")
+st.set_page_config(page_title="Login - Camp Booking", page_icon="🔐", layout="centered")
+
 # Initialize session state for auth
 init_session_state()
 
-st.title("🔐 Account Access")
+st.title("🔐 Login")
 
 if st.session_state.is_logged_in:
     st.success(f"Welcome back, {st.session_state.username}!")
-    if st.button("Logout"):
+    st.info("Welcome back! You can now access your profile and manage your bookings.")
+    if st.button("🚪 Logout"):
         from utils.auth import logout
         logout()
 else:
@@ -22,14 +24,14 @@ else:
         with st.form("login_form"):
             l_username = st.text_input("Username")
             l_password = st.text_input("Password", type="password")
-            l_submit = st.form_submit_button("Log In")
-            
+            l_submit = st.form_submit_button("Login")
+
             if l_submit:
                 if login(l_username, l_password):
                     st.success("Login successful!")
                     st.rerun()
                 else:
-                    st.error("Invalid username or password (try admin / password)")
+                    st.error("Invalid username or password")
 
     with tab2:
         st.header("Register")
@@ -46,4 +48,4 @@ else:
                 elif register(r_username, r_password, r_email):
                     st.success("Registration successful! You can now log in.")
                 else:
-                    st.error("Please fill in all fields.")
+                    st.error("Please fill in all fields correctly.")
