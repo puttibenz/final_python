@@ -8,7 +8,10 @@ def init_session_state():
         st.session_state.username = None
 
 def login(username, password):
-    """Mock login function for development."""
+    """
+    Mock login function. Replace this with a database check later.
+    Currently accepts 'admin' / 'password' as a test.
+    """
     if username == "admin" and password == "password":
         st.session_state.is_logged_in = True
         st.session_state.username = username
@@ -22,7 +25,9 @@ def logout():
     st.rerun()
 
 def register(username, password, email):
-    """Mock registration function."""
+    """
+    Mock registration function. Replace this with database storage later.
+    """
     if username and password and email:
         return True
     return False
