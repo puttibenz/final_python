@@ -102,6 +102,56 @@ class CampRepository:
         finally:
             conn.close()
 
+    def get_camps_by_owner(self, user_id: int):
+        """ดึงแคมป์ที่ user คนนี้เป็นคนสร้าง"""
+        conn = get_connection()
+        if not conn: return []
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM camps WHERE created_by = %s ORDER BY created_at DESC", (user_id,))
+                return cur.fetchall()
+        except Exception as e:
+            print(f"❌ Get Camps By Owner Error: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def delete_camp(self, camp_id: int):
+        """ยกเลิกแคมป์ (Soft Delete) เพื่อเก็บข้อมูลไว้แต่ไม่แสดงผลในหน้า Explore"""
+        conn = get_connection()
+        if not conn: return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE camps SET status = 'cancelled' WHERE id = %s", (camp_id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"❌ Delete Camp Error: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def sync_ended_camps(self):
+        """อัปเดตสถานะแคมป์ที่เลยวันไปแล้วให้เป็น 'ended'"""
+        conn = get_connection()
+        if not conn: return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE camps 
+                    SET status = 'ended'
+                    WHERE status = 'active'
+                    AND start_date IS NOT NULL
+                    AND DATE_ADD(start_date, INTERVAL duration DAY) < CURRENT_DATE()
+                """)
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"❌ Sync Ended Camps Error: {e}")
+            return False
+        finally:
+            conn.close()
+
 
 class BookingRepository:
     """จัดการข้อมูล bookings"""
@@ -127,6 +177,13 @@ class BookingRepository:
                 booking_id = cur.lastrowid
                 
                 cur.execute("UPDATE camps SET available_slots = available_slots - 1 WHERE id = %s", (camp_id,))
+                
+                # เช็คว่าเต็มหรือยัง
+                cur.execute("SELECT available_slots FROM camps WHERE id = %s", (camp_id,))
+                updated_camp = cur.fetchone()
+                if updated_camp and updated_camp["available_slots"] <= 0:
+                    cur.execute("UPDATE camps SET status = 'full' WHERE id = %s", (camp_id,))
+
                 conn.commit()
                 return booking_id
         except Exception as e:
@@ -289,12 +346,36 @@ class BookingRepository:
                     booking = cur.fetchone()
                     if booking and booking['status'] != 'cancelled':
                         cur.execute("UPDATE camps SET available_slots = available_slots + 1 WHERE id = %s", (booking['camp_id'],))
+                        # ถ้าเคยเต็ม ให้กลับมาเป็น active
+                        cur.execute("UPDATE camps SET status = 'active' WHERE id = %s AND status = 'full'", (booking['camp_id'],))
                 
                 cur.execute("UPDATE bookings SET status = %s WHERE id = %s", (status, booking_id))
                 conn.commit()
                 return True
         except Exception as e:
             print(f"❌ Update Booking Status Error: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def sync_completed_bookings(self):
+        """อัปเดตสถานะการจองเป็น 'completed' สำหรับแคมป์ที่จบลงแล้ว"""
+        conn = get_connection()
+        if not conn: return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE bookings b
+                    JOIN camps c ON b.camp_id = c.id
+                    SET b.status = 'completed'
+                    WHERE b.status = 'confirmed'
+                    AND c.start_date IS NOT NULL
+                    AND DATE_ADD(c.start_date, INTERVAL c.duration DAY) < CURRENT_DATE()
+                """)
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"❌ Sync Completed Bookings Error: {e}")
             return False
         finally:
             conn.close()

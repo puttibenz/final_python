@@ -70,18 +70,26 @@ if "pending_booking" in st.session_state:
     pending = st.session_state.pop("pending_booking")
     payment_dialog(pending["id"], pending["name"], pending["price"])
 
+# ── Sync Status ──
+# อัปเดตสถานะแคมป์และการจองที่จบลงแล้วโดยอัตโนมัติ
+camp_repo.sync_ended_camps()
+booking_repo.sync_completed_bookings()
+
 # ── Fetch Data ──
 camps_data = camp_repo.get_all()
 user_id = st.session_state.user["id"]
 user_booked = booking_repo.get_user_bookings(user_id)
 
-# ── Sidebar Filters ──
-with st.sidebar:
-    st.header("🔍 ค้นหา & กรอง")
-    search_query = st.text_input("ค้นหาชื่อหรือสถานที่", placeholder="เช่น เขาค้อ")
-    price_range = st.slider("ราคาสูงสุด (฿)", 0, 10000, 10000, step=500)
-    st.divider()
-    st.caption(f"📊 ทริปทั้งหมด: {len(camps_data)} | จองแล้ว: {len(user_booked)}")
+# ── Filter UI ──
+with st.container():
+    col_search, col_price = st.columns([2, 1])
+    with col_search:
+        search_query = st.text_input("🔍 ค้นหาชื่อหรือสถานที่", placeholder="เช่น เขาค้อ, กาญจนบุรี")
+    with col_price:
+        price_range = st.slider("💰 ราคาสูงสุด (฿)", 0, 10000, 10000, step=500)
+    
+    st.caption(f"📊 ทริปที่มีให้เลือก: {len(camps_data)} | จองแล้ว: {len(user_booked)}")
+st.divider()
 
 # ── Filter ──
 filtered = [

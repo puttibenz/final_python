@@ -70,11 +70,59 @@ class AuthManager:
         st.session_state.user = None
         st.rerun()
 
+    def render_sidebar_info(self):
+        """แสดงข้อมูลผู้ใช้และปุ่ม Logout ใน Sidebar (ถาวรทุกหน้า)"""
+        if self.is_logged_in:
+            user = self.current_user
+            with st.sidebar:
+                st.markdown(f"### 👤 {user.get('username', 'User')}")
+                st.caption(f"📧 {user.get('email', '')}")
+                st.caption(f"🏷️ สิทธิ์: {user.get('role', 'user')}")
+                
+                # แสดง Balance แบบสวยๆ
+                from database.crud import user_repo
+                latest_user = user_repo.get_user_by_id(user["id"])
+                balance = latest_user.get("balance", 0) if latest_user else 0
+                st.markdown(f"**💰 ยอดเงิน: ฿{balance:,.2f}**")
+                
+                st.divider()
+                if st.button("🚪 ออกจากระบบ", key="sidebar_logout", use_container_width=True):
+                    self.logout()
+
+    def inject_global_css(self):
+        """ใส่ CSS เพื่อซ่อนเมนูที่ไม่จำเป็นเมื่อ Login แล้ว"""
+        if self.is_logged_in:
+            user = self.current_user
+            
+            # CSS พื้นฐาน: ซ่อนหน้า Main (index 1)
+            hide_css = """
+            <style>
+                /* ซ่อนหน้า Main (index 1) ใน Sidebar Nav */
+                [data-testid="stSidebarNav"] li:nth-child(1) {
+                    display: none;
+                }
+            """
+            
+            # ถ้าไม่ใช่ admin ให้ซ่อนหน้า Admin Dash (ปกติจะเป็นหน้าสุดท้าย)
+            if user.get("role") != "admin":
+                hide_css += """
+                /* ซ่อนหน้า Admin Dash สำหรับผู้ใช้ทั่วไป */
+                [data-testid="stSidebarNav"] li:nth-child(5) {
+                    display: none;
+                }
+                """
+                
+            hide_css += "</style>"
+            st.markdown(hide_css, unsafe_allow_html=True)
+
     def check_auth_required(self, redirect_page: str = "main.py"):
         """Middleware ตรวจสอบว่าต้องล็อกอินก่อนถึงจะเข้าถึงหน้านี้ได้"""
         if not st.session_state.get("is_logged_in", False):
             st.warning("กรุณาเข้าสู่ระบบก่อนใช้งาน")
             st.switch_page(redirect_page)
+        else:
+            self.inject_global_css()
+            self.render_sidebar_info()
 
     @property
     def current_user(self):

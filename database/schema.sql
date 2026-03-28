@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS camps (
     description TEXT,
     contact VARCHAR(255),
     facebook_link TEXT,
-    status VARCHAR(20) DEFAULT 'active',
+    status ENUM('active', 'full', 'ended', 'cancelled') DEFAULT 'active',
     created_by INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
