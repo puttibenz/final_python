@@ -1,55 +1,57 @@
 import streamlit as st
 from utils.auth import auth_manager
 
-st.set_page_config(page_title="Camping Trip 🏕️", page_icon="🏕️", layout="centered")
-auth_manager.init_session_state()
+class LoginPage:
+    """Class สำหรับจัดการหน้า Login และ Register (OOP Version)"""
 
-# ── ถ้า Login แล้ว -> Redirect ไป Explore ทันที ──
-if auth_manager.is_logged_in:
-    auth_manager.inject_global_css()
-    st.switch_page("pages/1_🏕️_Explore.py")
+    def __init__(self):
+        auth_manager.init_session_state()
+        # ── ถ้า Login แล้ว -> Redirect ไป Explore ทันที ──
+        if auth_manager.is_logged_in:
+            auth_manager.inject_global_css()
+            st.switch_page("pages/1_🏕️_Explore.py")
 
-# ── ซ่อน sidebar navigation ถ้ายังไม่ login ──
-st.markdown("""
-<style>
-    [data-testid="stSidebarNav"] { display: none; }
-    section[data-testid="stSidebar"] { display: none; }
-    
-    /* สไตล์สำหรับ Login Card */
-    .login-container {
-        background-color: #1E1E1E;
-        padding: 2.5rem;
-        border-radius: 20px;
-        border: 1px solid #333;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-    }
-    .login-header {
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .login-header h1 {
-        color: #66BB6A;
-        font-size: 2.2rem;
-        margin-bottom: 0.5rem;
-    }
-</style>
-""", unsafe_allow_html=True)
+    def render_header(self):
+        """แสดง CSS และ Header ของหน้า Login"""
+        st.markdown("""
+        <style>
+            [data-testid="stSidebarNav"] { display: none; }
+            section[data-testid="stSidebar"] { display: none; }
+            
+            .login-header {
+                text-align: center;
+                margin-bottom: 2rem;
+            }
+            .login-header h1 {
+                color: #66BB6A;
+                font-size: 2.2rem;
+                margin-bottom: 0.5rem;
+            }
+        </style>
+        """, unsafe_allow_html=True)
 
-# ── Header ──
-st.markdown("""
-<div class="login-header">
-    <h1>🏕️ Camping Trip</h1>
-    <p style="color:#888;">ค้นหาและสร้างทริปแคมป์ที่ใช่สำหรับคุณ</p>
-</div>
-""", unsafe_allow_html=True)
+        st.markdown("""
+        <div class="login-header">
+            <h1>🏕️ Camping Trip</h1>
+            <p style="color:#888;">ค้นหาและสร้างทริปแคมป์ที่ใช่สำหรับคุณ</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-# ── Login/Register Card ──
-_, col, _ = st.columns([1, 4, 1])
+    def render_auth_form(self):
+        """แสดงฟอร์ม Login และ Register ในรูปแบบ Card/Tabs"""
+        _, col, _ = st.columns([1, 4, 1])
 
-with col:
-    tab1, tab2 = st.tabs(["🔐 เข้าสู่ระบบ", "✨ สมัครสมาชิก"])
+        with col:
+            tab1, tab2 = st.tabs(["🔐 เข้าสู่ระบบ", "✨ สมัครสมาชิก"])
 
-    with tab1:
+            with tab1:
+                self._render_login_tab()
+
+            with tab2:
+                self._render_register_tab()
+
+    def _render_login_tab(self):
+        """Private method สำหรับหน้า Login"""
         with st.form("login_form", clear_on_submit=False):
             st.markdown("### เข้าสู่ระบบ")
             l_email = st.text_input("📧 อีเมล", placeholder="example@email.com")
@@ -69,7 +71,8 @@ with col:
                         else:
                             st.error(f"❌ {msg}")
 
-    with tab2:
+    def _render_register_tab(self):
+        """Private method สำหรับหน้า Register"""
         with st.form("register_form"):
             st.markdown("### สมัครสมาชิก")
             r_username = st.text_input("👤 ชื่อผู้ใช้ (Username)")
@@ -103,5 +106,13 @@ with col:
                             error_msg = msg.get("error") if isinstance(msg, dict) else msg
                             st.error(f"❌ {error_msg}")
 
-st.markdown("---")
-st.caption("<p style='text-align:center;'>© 2026 Camping Project Community</p>", unsafe_allow_html=True)
+    def render(self):
+        """เมธอดหลักในการแสดงผลหน้าเว็บ"""
+        self.render_header()
+        self.render_auth_form()
+        st.markdown("---")
+        st.caption("<p style='text-align:center;'>© 2026 Camping Project Community</p>", unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    page = LoginPage()
+    page.render()
