@@ -28,6 +28,19 @@ class CreateCampPage:
                 padding: 2rem;
                 background-color: #1E1E1E;
             }
+            /* ปรับสี Label ให้สว่างขึ้น */
+            div[data-testid="stForm"] label {
+                color: #FFFFFF !important;
+                font-weight: 500;
+            }
+            /* ปรับสีตัวอักษรทั่วไปในฟอร์ม */
+            div[data-testid="stForm"] {
+                color: #EEEEEE !important;
+            }
+            /* ปรับสี Caption และ Help text */
+            div[data-testid="stForm"] .stCaption {
+                color: #aaa !important;
+            }
         </style>
         """, unsafe_allow_html=True)
 

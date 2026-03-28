@@ -9,7 +9,8 @@ load_dotenv()
 # ตั้งค่า Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel('gemini-2.0-flash')
+model = genai.GenerativeModel('models/gemini-2.5-flash')
+
 
 def clean_raw_data_with_ai(raw_data=None, input_file='apify_raw_data_latest.json', output_file='clean_camps_ready_for_sql.json', save_to_file=True):
     # หากไม่ได้ส่ง raw_data มา ให้ลองอ่านจากไฟล์
@@ -28,9 +29,22 @@ def clean_raw_data_with_ai(raw_data=None, input_file='apify_raw_data_latest.json
 
     print(f"🧠 กำลังใช้ AI สกัดและคลีนข้อมูล {len(raw_data)} รายการ...")
 
-    # ประหยัด Quota: ส่งรอบละ 10-15 รายการ + พัก 5 วินาที
-    batch_size = 15
-    cleaned_results = []
+    # Load existing results to skip duplicates
+    existing_links = set()
+    if os.path.exists(output_file):
+        try:
+            with open(output_file, 'r', encoding='utf-8') as f:
+                existing_data = json.load(f)
+                existing_links = {item.get('facebook_link') for item in existing_data if item.get('facebook_link')}
+                cleaned_results = existing_data
+                print(f"✅ โหลดข้อมูลเดิม {len(cleaned_results)} รายการ (มี {len(existing_links)} ลิงก์ที่ไม่ซ้ำ)")
+        except:
+            cleaned_results = []
+    else:
+        cleaned_results = []
+
+    # ประหยัด Quota: ส่งรอบละ 5 รายการ + พัก 10 วินาที
+    batch_size = 5
 
     prompt_instructions = """
     คุณเป็น Data Engineer ที่เชี่ยวชาญการทำความสะอาดข้อมูล (Data Cleaning)
@@ -57,13 +71,43 @@ def clean_raw_data_with_ai(raw_data=None, input_file='apify_raw_data_latest.json
 
     for i in range(0, len(raw_data), batch_size):
         chunk = raw_data[i:i+batch_size]
-        print(f"⏳ กำลังประมวลผลรายการที่ {i+1} ถึง {min(i+batch_size, len(raw_data))}...")
+        
+        # กรองเอาเฉพาะรายการที่ยังไม่เคยทำ (เช็คจาก URL)
+        filtered_chunk = []
+        for item in chunk:
+            url = item.get('url')
+            if url not in existing_links:
+                filtered_chunk.append(item)
+        
+        if not filtered_chunk:
+            continue
+
+        # Simplify chunk to save tokens and improve quality
+        simplified_chunk = []
+        for item in filtered_chunk:
+            image_url = None
+            if 'attachments' in item and item['attachments']:
+                for att in item['attachments']:
+                    if 'image' in att and 'uri' in att['image']:
+                        image_url = att['image']['uri']
+                        break
+                    elif 'thumbnail' in att:
+                        image_url = att['thumbnail']
+                        break
+            
+            simplified_chunk.append({
+                "text": item.get("text", ""),
+                "url": item.get("url", ""),
+                "image_url": image_url
+            })
+
+        print(f"⏳ กำลังประมวลผลรายการที่ {i+1} ถึง {min(i+batch_size, len(raw_data))}... (ข้ามที่ซ้ำแล้ว)")
         
         max_retries = 5
         for attempt in range(max_retries):
             try:
-                # ส่งข้อมูลไปประมวลผล
-                full_prompt = prompt_instructions + json.dumps(chunk, ensure_ascii=False)
+                # ส่งข้อมูลที่ย่อแล้วไปประมวลผล
+                full_prompt = prompt_instructions + json.dumps(simplified_chunk, ensure_ascii=False)
                 response = model.generate_content(full_prompt)
                 
                 # สกัดเฉพาะเนื้อหา JSON
@@ -74,10 +118,30 @@ def clean_raw_data_with_ai(raw_data=None, input_file='apify_raw_data_latest.json
                     raw_text = raw_text.split("```")[1].split("```")[0].strip()
                 
                 cleaned_batch = json.loads(raw_text)
-                cleaned_results.extend(cleaned_batch)
                 
-                print(f"✅ บันทึกแล้ว {len(cleaned_results)} รายการ... พัก 5 วินาที...")
-                time.sleep(5)
+                # ป้องกันเบิ้ลในรอบเดียวกัน (เช็คทั้ง URL และข้อมูลทริป)
+                for item in cleaned_batch:
+                    link = item.get('facebook_link')
+                    trip_key = f"{item.get('name')}|{item.get('location')}|{item.get('start_date')}"
+                    
+                    if link and link not in existing_links:
+                        # เช็คว่ามีทริปชื่อนี้ วันนี้ จังหวัดนี้อยู่แล้วหรือยัง
+                        is_duplicate_trip = any(
+                            f"{res.get('name')}|{res.get('location')}|{res.get('start_date')}" == trip_key 
+                            for res in cleaned_results
+                        )
+                        
+                        if not is_duplicate_trip:
+                            cleaned_results.append(item)
+                            existing_links.add(link)
+
+                print(f"✅ บันทึกรวมแล้ว {len(cleaned_results)} รายการ (ไม่ซ้ำทริป)... พัก 10 วินาที...")
+                
+                # บันทึกทุกครั้งที่จบ batch กันพลาด
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    json.dump(cleaned_results, f, ensure_ascii=False, indent=2)
+                
+                time.sleep(10)
                 break  # สำเร็จแล้ว ออกจาก retry loop
                 
             except Exception as e:

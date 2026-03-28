@@ -23,21 +23,46 @@ class ExplorePage:
         """แสดง CSS และ Header"""
         st.markdown("""
         <style>
-            .explore-header { text-align: center; padding: 1.5rem 0 0.5rem; }
+            /* ขยายความกว้างของหน้าจอ */
+            .block-container {
+                max-width: 1400px !important;
+                padding-left: 5rem !important;
+                padding-right: 5rem !important;
+            }
+            
+            .explore-header { text-align: center; padding: 2rem 0 3rem; }
             .explore-header h1 {
-                font-size: 2.2rem;
-                background: linear-gradient(135deg, #2E7D32, #66BB6A);
+                font-size: 2.8rem;
+                font-weight: 800;
+                background: linear-gradient(135deg, #66BB6A, #2E7D32);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
+                margin-bottom: 0.5rem;
             }
-            .explore-header p { color: #888; font-size: 1rem; }
+            .explore-header p { color: #888; font-size: 1.1rem; }
+            
+            /* Animations */
+            @keyframes slideUp {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .stApp { animation: slideUp 0.5s ease-out; }
+            
+            /* Search Panel Styling */
+            .search-panel {
+                background: #1E1E1E;
+                border-radius: 20px;
+                padding: 1.5rem;
+                border: 1px solid #333;
+                margin-bottom: 2rem;
+            }
         </style>
         """, unsafe_allow_html=True)
 
         st.markdown("""
         <div class="explore-header">
-            <h1>🏕️ ค้นหาทริปแคมป์</h1>
-            <p>เลือกทริปที่ใช่แล้วจองเลย!</p>
+            <h1>⛺ ค้นหาทริปแคมป์</h1>
+            <p>เลือกทริปที่ใช่แล้วออกเดินทางไปกับเรา!</p>
         </div>
         """, unsafe_allow_html=True)
         st.divider()
@@ -99,7 +124,7 @@ class ExplorePage:
         return search_query, price_range
 
     def render_grid(self, search_query, price_range, confirm_func):
-        """แสดงรายการแคมป์ในรูปแบบ Grid"""
+        """แสดงรายการแคมป์ในรูปแบบ Grid พร้อม Pagination"""
         filtered = [
             c for c in self.camps_data
             if (search_query.lower() in str(c.get("name", "")).lower()
@@ -114,8 +139,25 @@ class ExplorePage:
             else:
                 st.warning("ไม่พบทริปที่ตรงกับเงื่อนไข ลองปรับตัวกรองดู")
         else:
+            # ── Pagination Logic ──
+            items_per_page = 9
+            total_items = len(filtered)
+            total_pages = (total_items + items_per_page - 1) // items_per_page
+            
+            if "current_page" not in st.session_state:
+                st.session_state.current_page = 1
+            
+            # ป้องกันหน้าเกินขอบเขตกรณีเปลี่ยนตัวกรอง
+            if st.session_state.current_page > total_pages:
+                st.session_state.current_page = 1
+
+            start_idx = (st.session_state.current_page - 1) * items_per_page
+            end_idx = start_idx + items_per_page
+            page_items = filtered[start_idx:end_idx]
+
+            # ── Render Grid (3 columns) ──
             cols = st.columns(3)
-            for idx, camp in enumerate(filtered):
+            for idx, camp in enumerate(page_items):
                 with cols[idx % 3]:
                     card = CampCard(camp)
                     is_booked = camp.get("id") in self.user_booked
@@ -123,6 +165,20 @@ class ExplorePage:
 
                     if result:
                         confirm_func(camp)
+
+            # ── Pagination Controls ──
+            st.write("")
+            col_prev, col_page, col_next = st.columns([1, 2, 1])
+            with col_prev:
+                if st.button("⬅️ ก่อนหน้า", disabled=st.session_state.current_page <= 1, use_container_width=True):
+                    st.session_state.current_page -= 1
+                    st.rerun()
+            with col_page:
+                st.markdown(f"<p style='text-align:center;'>หน้า {st.session_state.current_page} จาก {total_pages}</p>", unsafe_allow_html=True)
+            with col_next:
+                if st.button("ถัดไป ➡️", disabled=st.session_state.current_page >= total_pages, use_container_width=True):
+                    st.session_state.current_page += 1
+                    st.rerun()
 
     def render(self):
         """เมธอดหลักในการแสดงผลหน้าเว็บ"""
