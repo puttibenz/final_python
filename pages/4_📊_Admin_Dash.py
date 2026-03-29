@@ -2,25 +2,26 @@ import streamlit as st
 from utils.auth import auth_manager
 from database.crud import camp_repo, booking_repo
 from components.charts import AdminCharts
+from utils.base_page import BasePage
 
-# Page Config
-st.set_page_config(page_title="Admin Dashboard", page_icon="📊", layout="wide")
-
-auth_manager.check_auth_required()
-
-# Security Check: Ensure only admin can access
-user = auth_manager.current_user
-if user.get("role") != "admin":
-    st.error("⛔ คุณไม่มีสิทธิ์เข้าถึงหน้านี้")
-    st.stop()
-
-class AdminDashboard:
+class AdminDashboard(BasePage):
     """
     จัดการข้อมูลหลังบ้านสำหรับ Admin
     """
     def __init__(self):
+        super().__init__(title="📊 Admin Dashboard", subtitle="วิเคราะห์ข้อมูล การจอง และการจัดการผู้ใช้")
+        
+        # Security Check: Ensure only admin can access
+        if self.user.get("role") != "admin":
+            st.error("⛔ คุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+            st.stop()
+            
         self.camps = camp_repo.get_all()
         self.bookings = booking_repo.get_all_bookings_detail()
+
+    def render_header(self):
+        """เรียกใช้ header จาก BasePage"""
+        super().render_header()
 
     def render_stats(self):
         """แสดงภาพรวมสถิติ"""

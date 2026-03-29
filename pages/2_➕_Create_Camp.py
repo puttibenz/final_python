@@ -1,27 +1,22 @@
 import streamlit as st
 from components.forms import CampForm
 from database.crud import camp_repo
-from utils.auth import auth_manager
+from utils.base_page import BasePage
 
-class CreateCampPage:
+class CreateCampPage(BasePage):
     """Class สำหรับจัดการหน้าสร้างทริปแคมป์ใหม่"""
 
     def __init__(self):
-        auth_manager.check_auth_required()
-        self.user_id = st.session_state.user["id"]
+        super().__init__(title="🏕️ สร้างทริปแคมป์ใหม่", subtitle="กรอกรายละเอียดทริปของคุณ แล้วเผยแพร่ให้คนอื่นเข้าร่วม!")
 
     def render_header(self):
-        """แสดง CSS และ Header"""
+        """แสดง Header พร้อม CSS เฉพาะของฟอร์ม"""
+        # เรียกใช้ header มาตรฐานจาก BasePage
+        super().render_header()
+        
+        # เพิ่ม CSS เฉพาะหน้าสำหรับฟอร์ม
         st.markdown("""
         <style>
-            .camp-header { text-align: center; padding: 1.5rem 0 0.5rem; }
-            .camp-header h1 {
-                font-size: 2.2rem;
-                background: linear-gradient(135deg, #2E7D32, #66BB6A);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-            }
-            .camp-header p { color: #888; font-size: 1rem; }
             div[data-testid="stForm"] {
                 border: 1px solid #333;
                 border-radius: 16px;
@@ -43,14 +38,6 @@ class CreateCampPage:
             }
         </style>
         """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class="camp-header">
-            <h1>🏕️ สร้างทริปแคมป์ใหม่</h1>
-            <p>กรอกรายละเอียดทริปของคุณ แล้วเผยแพร่ให้คนอื่นเข้าร่วม!</p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.divider()
 
     def handle_form(self):
         """แสดงฟอร์มและจัดการการบันทึกข้อมูล"""

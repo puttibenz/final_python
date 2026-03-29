@@ -1,14 +1,13 @@
 import streamlit as st
 from utils.auth import auth_manager
 from database.crud import user_repo, booking_repo, camp_repo
+from utils.base_page import BasePage
 
-class ProfilePage:
+class ProfilePage(BasePage):
     """Class สำหรับจัดการหน้าโปรไฟล์ผู้ใช้ ตามแบบ imagej1 และ imagej2"""
 
     def __init__(self):
-        auth_manager.check_auth_required()
-        self.user = auth_manager.current_user
-        self.user_id = self.user["id"]
+        super().__init__(title="👤 โปรไฟล์", subtitle="จัดการข้อมูลส่วนตัวของคุณ", require_auth=True)
         
         # โหลดข้อมูลล่าสุด
         self.latest_user = user_repo.get_user_by_id(self.user_id)
@@ -16,6 +15,9 @@ class ProfilePage:
 
     def render_header(self):
         """Inject CSS สำหรับ Layout ใหม่ทั้งหมด"""
+        # เรียก CSS พื้นฐาน
+        self.render_common_css()
+        
         st.markdown("""
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap');

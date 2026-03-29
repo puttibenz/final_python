@@ -1,71 +1,22 @@
 import streamlit as st
 from components.camp_card import CampCard
 from database.crud import camp_repo, booking_repo
-from utils.auth import auth_manager
+from utils.base_page import BasePage
 
-class ExplorePage:
+class ExplorePage(BasePage):
     """Class สำหรับจัดการหน้า Explore ค้นหาและจองแคมป์"""
 
     def __init__(self):
-        # 1. ตรวจสอบสิทธิ์การเข้าถึง
-        auth_manager.check_auth_required()
-        self.user_id = st.session_state.user["id"]
+        # เรียก Constructor ของ BasePage (จัดการ Auth และตั้งชื่อหน้า)
+        super().__init__(title="⛺ ค้นหาทริปแคมป์", subtitle="เลือกทริปที่ใช่แล้วออกเดินทางไปกับเรา!")
         
-        # 2. Sync สถานะแคมป์และการจองที่จบลงแล้ว
+        # 1. Sync สถานะแคมป์และการจองที่จบลงแล้ว
         camp_repo.sync_ended_camps()
         booking_repo.sync_completed_bookings()
         
-        # 3. โหลดข้อมูลเริ่มต้น
+        # 2. โหลดข้อมูลเริ่มต้น
         self.camps_data = camp_repo.get_all()
         self.user_booked = booking_repo.get_user_bookings(self.user_id)
-
-    def render_header(self):
-        """แสดง CSS และ Header"""
-        st.markdown("""
-        <style>
-            /* ขยายความกว้างของหน้าจอ */
-            .block-container {
-                max-width: 1400px !important;
-                padding-left: 5rem !important;
-                padding-right: 5rem !important;
-            }
-            
-            .explore-header { text-align: center; padding: 2rem 0 3rem; }
-            .explore-header h1 {
-                font-size: 2.8rem;
-                font-weight: 800;
-                background: linear-gradient(135deg, #66BB6A, #2E7D32);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                margin-bottom: 0.5rem;
-            }
-            .explore-header p { color: #888; font-size: 1.1rem; }
-            
-            /* Animations */
-            @keyframes slideUp {
-                from { opacity: 0; transform: translateY(20px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            .stApp { animation: slideUp 0.5s ease-out; }
-            
-            /* Search Panel Styling */
-            .search-panel {
-                background: #1E1E1E;
-                border-radius: 20px;
-                padding: 1.5rem;
-                border: 1px solid #333;
-                margin-bottom: 2rem;
-            }
-        </style>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class="explore-header">
-            <h1>⛺ ค้นหาทริปแคมป์</h1>
-            <p>เลือกทริปที่ใช่แล้วออกเดินทางไปกับเรา!</p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.divider()
 
     def render_dialogs(self):
         """จัดการ Dialogs ต่างๆ (Booking & Payment)"""
