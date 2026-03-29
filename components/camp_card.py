@@ -111,7 +111,7 @@ class CampCard:
                     </div>
                 </div>
                 <div class="trip-info-line">🗓️ เริ่ม: <strong>{start_date if start_date else "เร็วๆ นี้"}</strong></div>
-                {f'<div class="trip-info-line">📞 {contact}</div>' if contact else ""}
+                {f'<div class="trip-info-line">📞 {contact}</div>' if contact else '<div class="trip-info-line">📞 ไม่มีข้อมูล</div>'}
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -120,7 +120,7 @@ class CampCard:
         # Since HTML buttons in st.markdown can't trigger Python actions easily, 
         # we use Streamlit buttons below the card but style them to feel integrated.
         
-        if created_by == 6:
+        if created_by == 3:
             if facebook_link:
                 st.link_button("🌐 ดูรายละเอียดบน Facebook", url=facebook_link, use_container_width=True)
             else:
